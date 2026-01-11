@@ -89,10 +89,18 @@ interface AppState {
   detectionThreshold: number
   minimumSpacing: number
   weightingFactor: number
+  weightEdges: number
+  weightIntersections: number
+  weightSymmetry: number
+  maxPoints: number
   setPointDensity: (value: number) => void
   setDetectionThreshold: (value: number) => void
   setMinimumSpacing: (value: number) => void
   setWeightingFactor: (value: number) => void
+  setWeightEdges: (value: number) => void
+  setWeightIntersections: (value: number) => void
+  setWeightSymmetry: (value: number) => void
+  setMaxPoints: (value: number) => void
 
   // Adjusted points
   adjustedPoints: Point2D[]
@@ -137,7 +145,39 @@ interface AppState {
   setModelColor: (color: string) => void
   setModelColor2: (color: string) => void
   setUseGradient: (use: boolean) => void
+  
+  // Cymatic animation controls
+  waveSpeed: number
+  waveAmplitude: number
+  rippleSpeed: number
+  rippleAmplitude: number
+  enableStandingWave: boolean
+  enableRipple: boolean
+  setWaveSpeed: (speed: number) => void
+  setWaveAmplitude: (amplitude: number) => void
+  setRippleSpeed: (speed: number) => void
+  setRippleAmplitude: (amplitude: number) => void
+  setEnableStandingWave: (enable: boolean) => void
+  setEnableRipple: (enable: boolean) => void
 
+  // 3D Model generation parameters
+  targetShape: string
+  geometryParams: {
+    extrusion_depth: number
+    curvature: number
+    subdivision_level: number
+    smoothing_iterations: number
+    pattern_scale: number
+    hollow: boolean
+    wall_thickness: number
+  }
+  setTargetShape: (shape: string) => void
+  setGeometryParams: (params: Partial<typeof initialState.geometryParams>) => void
+  
+  // Export state
+  exportFormat: string
+  setExportFormat: (format: string) => void
+  
   // 3D Model state
   modelGenerated: boolean
   setModelGenerated: (generated: boolean) => void
@@ -166,12 +206,27 @@ const initialState = {
   patternAnalysis: null,
   pointDensity: 50,
   detectionThreshold: 100,
-  minimumSpacing: 5,
+  minimumSpacing: 10,
   weightingFactor: 1.0,
+  weightEdges: 1.0,
+  weightIntersections: 1.5,
+  weightSymmetry: 1.2,
+  maxPoints: 1000,
   adjustedPoints: [],
   editMode: 'automatic' as const,
   geometricFeatures: [],
   selectedTool: null,
+  targetShape: 'auto',
+  geometryParams: {
+    extrusion_depth: 1.0,
+    curvature: 0.0,
+    subdivision_level: 2,
+    smoothing_iterations: 3,
+    pattern_scale: 1.0,
+    hollow: false,
+    wall_thickness: 0.1,
+  },
+  exportFormat: 'stl',
   modelGenerated: false,
   frameCount: 30,
   currentFrame: 0,
@@ -179,6 +234,12 @@ const initialState = {
   modelColor: '#00CCCC',
   modelColor2: '#1560BD',
   useGradient: false,
+  waveSpeed: 1.0,
+  waveAmplitude: 1.0,
+  rippleSpeed: 0.5,
+  rippleAmplitude: 0.15,
+  enableStandingWave: true,
+  enableRipple: true,
   projectName: 'Untitled Project',
   stepHistory: [],
   currentHistoryIndex: -1,
@@ -278,6 +339,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setDetectionThreshold: (value) => set({ detectionThreshold: value }),
   setMinimumSpacing: (value) => set({ minimumSpacing: value }),
   setWeightingFactor: (value) => set({ weightingFactor: value }),
+  setWeightEdges: (value) => set({ weightEdges: value }),
+  setWeightIntersections: (value) => set({ weightIntersections: value }),
+  setWeightSymmetry: (value) => set({ weightSymmetry: value }),
+  setMaxPoints: (value) => set({ maxPoints: value }),
 
   setAdjustedPoints: (points) => {
     set({ adjustedPoints: points })
@@ -360,7 +425,32 @@ export const useAppStore = create<AppState>((set, get) => ({
   setModelColor: (color) => set({ modelColor: color }),
   setModelColor2: (color) => set({ modelColor2: color }),
   setUseGradient: (use) => set({ useGradient: use }),
+  
+  // Cymatic animation controls
+  waveSpeed: 1.0,
+  waveAmplitude: 1.0,
+  rippleSpeed: 0.5,
+  rippleAmplitude: 0.15,
+  enableStandingWave: true,
+  enableRipple: true,
+  setWaveSpeed: (speed) => set({ waveSpeed: speed }),
+  setWaveAmplitude: (amplitude) => set({ waveAmplitude: amplitude }),
+  setRippleSpeed: (speed) => set({ rippleSpeed: speed }),
+  setRippleAmplitude: (amplitude) => set({ rippleAmplitude: amplitude }),
+  setEnableStandingWave: (enable) => set({ enableStandingWave: enable }),
+  setEnableRipple: (enable) => set({ enableRipple: enable }),
 
+  targetShape: 'auto',
+  setTargetShape: (shape) => set({ targetShape: shape }),
+  
+  geometryParams: initialState.geometryParams,
+  setGeometryParams: (params) => set((state) => ({
+    geometryParams: { ...state.geometryParams, ...params }
+  })),
+  
+  exportFormat: 'stl',
+  setExportFormat: (format) => set({ exportFormat: format }),
+  
   modelGenerated: false,
   setModelGenerated: (generated) => set({ modelGenerated: generated }),
 

@@ -170,9 +170,15 @@ def apply_twist(
     axis_idx = {"x": 0, "y": 1, "z": 2}[axis]
     other_axes = [i for i in range(3) if i != axis_idx]
     
+# Compute axis center to make twist noticeable for centered meshes
+    axis_values = vertices[:, axis_idx]
+    axis_min = axis_values.min()
+    axis_max = axis_values.max()
+    axis_center = (axis_min + axis_max) / 2.0
+
     for i, vertex in enumerate(vertices):
-        # Distance along twist axis determines rotation
-        dist = vertex[axis_idx]
+        # Distance along twist axis determines rotation relative to center
+        dist = vertex[axis_idx] - axis_center
         angle = dist * angle_per_unit
         
         # Rotate in the plane perpendicular to axis

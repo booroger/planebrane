@@ -186,8 +186,8 @@ export function AnalysisSection() {
               {patternAnalysis && (
                 <div className="space-y-4">
                   <div>
-                    <p className="label-text mb-2">Pattern Type</p>
-                    <Badge variant="secondary" className="body-sm">
+                    <p className="label-text mb-2">Primary Pattern Type</p>
+                    <Badge variant="secondary" className="body-sm text-sm">
                       {patternAnalysis.pattern_type}
                     </Badge>
                   </div>
@@ -203,8 +203,15 @@ export function AnalysisSection() {
                   </div>
 
                   <div>
-                    <p className="label-text mb-2">Symmetry Axes Detected</p>
+                    <p className="label-text mb-2">Symmetry Order</p>
                     <p className="heading-sm">{patternAnalysis.symmetry_axes}</p>
+                  </div>
+
+                  <div>
+                    <p className="label-text mb-2">Detected Points</p>
+                    <p className="body-sm text-muted-foreground">
+                      {patternAnalysis.detected_points.length} feature points identified
+                    </p>
                   </div>
 
                   <div className="pt-4">

@@ -1,5 +1,11 @@
 """FastAPI application entry point."""
 
+import asyncio
+import sys
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -19,9 +25,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     print(f"🚀 {settings.app_name} starting up...")
     print(f"   Environment: {settings.app_env}")
     print(f"   Debug: {settings.debug}")
-    
+
     yield
-    
+
     # Shutdown
     print(f"👋 {settings.app_name} shutting down...")
 
@@ -48,6 +54,7 @@ def create_app() -> FastAPI:
 
     # Register routers
     from app.api.routes import api_router
+
     app.include_router(api_router, prefix="/api/v1")
 
     @app.get("/health")
@@ -67,6 +74,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",

@@ -62,10 +62,13 @@ def _detect_rotational_symmetry(
     height, width = image.shape[:2]
     center = (width / 2, height / 2)
     
+    # Ensure uint8 input for OpenCV thresholding
+    img_u8 = _to_uint8(image)
+
     # Find centroid of content as potential center
-    _, thresh = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    _, thresh = cv2.threshold(img_u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     moments = cv2.moments(thresh)
-    
+
     if moments["m00"] != 0:
         cx = moments["m10"] / moments["m00"]
         cy = moments["m01"] / moments["m00"]
@@ -79,19 +82,22 @@ def _detect_rotational_symmetry(
     for angle in angles_to_test:
         # Compute how many rotations of this angle fit in 360
         order = 360 // angle
-        
-        # Rotate image
+
+        # Rotate image (use uint8 input for warpAffine)
         rotation_matrix = cv2.getRotationMatrix2D(content_center, angle, 1.0)
-        rotated = cv2.warpAffine(
-            image, rotation_matrix, (width, height),
+        rotated_u8 = cv2.warpAffine(
+            img_u8, rotation_matrix, (width, height),
             flags=cv2.INTER_LINEAR,
             borderMode=cv2.BORDER_CONSTANT,
             borderValue=0,
         )
-        
+
+        # Convert back to float for correlation
+        rotated = rotated_u8.astype(np.float64)
+
         # Compute correlation
-        correlation = _compute_image_correlation(image, rotated)
-        
+        correlation = _compute_image_correlation(image.astype(np.float64), rotated)
+
         if correlation > best_score:
             best_score = correlation
             best_order = order
@@ -110,6 +116,7 @@ def _detect_reflectional_symmetry(
     image: np.ndarray,
     threshold: float = 0.85,
 ) -> Tuple[bool, List[float]]:
+    img_u8 = _to_uint8(image)
     """
     Detect reflectional (mirror) symmetry.
     
@@ -125,13 +132,13 @@ def _detect_reflectional_symmetry(
     axes = []
     
     # Test horizontal axis (flip vertically)
-    flipped_h = cv2.flip(image, 0)
-    if _compute_image_correlation(image, flipped_h) >= threshold:
+    flipped_h = cv2.flip(img_u8, 0)
+    if _compute_image_correlation(image.astype(np.float64), flipped_h.astype(np.float64)) >= threshold:
         axes.append(0.0)  # Horizontal axis
-    
+
     # Test vertical axis (flip horizontally)
-    flipped_v = cv2.flip(image, 1)
-    if _compute_image_correlation(image, flipped_v) >= threshold:
+    flipped_v = cv2.flip(img_u8, 1)
+    if _compute_image_correlation(image.astype(np.float64), flipped_v.astype(np.float64)) >= threshold:
         axes.append(90.0)  # Vertical axis
     
     # Test diagonal axes
@@ -167,6 +174,10 @@ def _compute_image_correlation(img1: np.ndarray, img2: np.ndarray) -> float:
     f1 = img1.astype(np.float64)
     f2 = img2.astype(np.float64)
     
+    # Guard against zero-variance images
+    if f1.std() < 1e-8 or f2.std() < 1e-8:
+        return 0.0
+    
     # Normalize
     f1 = (f1 - f1.mean()) / (f1.std() + 1e-10)
     f2 = (f2 - f2.mean()) / (f2.std() + 1e-10)
@@ -176,6 +187,19 @@ def _compute_image_correlation(img1: np.ndarray, img2: np.ndarray) -> float:
     
     # Clamp to [0, 1]
     return float(max(0, min(1, (correlation + 1) / 2)))
+
+
+
+def _to_uint8(image: np.ndarray) -> np.ndarray:
+    """Convert image to uint8 safely for OpenCV operations."""
+    if image.dtype == np.uint8:
+        return image
+    im = image.copy()
+    if im.max() <= 1.0:
+        im = (im * 255.0).clip(0, 255).astype(np.uint8)
+    else:
+        im = im.clip(0, 255).astype(np.uint8)
+    return im
 
 
 def _compute_symmetry_score(rotation_score: float, num_reflection_axes: int) -> float:

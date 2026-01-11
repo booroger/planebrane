@@ -2,16 +2,18 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import type * as THREE from 'three'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Grid, GizmoHelper, GizmoViewport } from '@react-three/drei'
-import { ArrowRight, Maximize2, Play, Pause, ZoomIn, ZoomOut, Box, Grid3x3, Sparkles, Circle, Palette } from 'lucide-react'
+import { ArrowRight, Maximize2, Play, Pause, ZoomIn, ZoomOut, Box, Grid3x3, Sparkles, Circle, Palette, Waves, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Slider } from '@/components/ui/slider'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useAppStore } from '@/store/useAppStore'
 import { CymaticGeometry } from './CymaticGeometry'
 import { Switch } from '@/components/ui/switch'
+import { Separator } from '@/components/ui/separator'
 
 type RenderMode = 'solid' | 'wireframe' | 'lines' | 'points'
 
@@ -24,6 +26,12 @@ interface SceneProps {
   modelColor: string
   modelColor2: string
   useGradient: boolean
+  waveSpeed: number
+  waveAmplitude: number
+  rippleSpeed: number
+  rippleAmplitude: number
+  enableStandingWave: boolean
+  enableRipple: boolean
   modelData: {
     vertices: [number, number, number][]
     faces: [number, number, number][]
@@ -31,7 +39,23 @@ interface SceneProps {
   } | null
 }
 
-function Scene({ currentFrame, frameCount, lineWidth, zoom, renderMode, modelColor, modelColor2, useGradient, modelData }: SceneProps) {
+function Scene({ 
+  currentFrame, 
+  frameCount, 
+  lineWidth, 
+  zoom, 
+  renderMode, 
+  modelColor, 
+  modelColor2, 
+  useGradient,
+  waveSpeed,
+  waveAmplitude,
+  rippleSpeed,
+  rippleAmplitude,
+  enableStandingWave,
+  enableRipple,
+  modelData 
+}: SceneProps) {
   const groupRef = useRef<THREE.Group>(null)
   const cameraRef = useRef<THREE.PerspectiveCamera>(null)
 
@@ -92,6 +116,12 @@ function Scene({ currentFrame, frameCount, lineWidth, zoom, renderMode, modelCol
             useGradient={useGradient}
             opacity={0.9}
             animationProgress={animationProgress}
+            waveSpeed={waveSpeed}
+            waveAmplitude={waveAmplitude}
+            rippleSpeed={rippleSpeed}
+            rippleAmplitude={rippleAmplitude}
+            enableStandingWave={enableStandingWave}
+            enableRipple={enableRipple}
           />
         </group>
       )}
@@ -129,15 +159,33 @@ export function View3DSection() {
     setModelColor,
     setModelColor2,
     setUseGradient,
+    waveSpeed,
+    waveAmplitude,
+    rippleSpeed,
+    rippleAmplitude,
+    enableStandingWave,
+    enableRipple,
+    setWaveSpeed,
+    setWaveAmplitude,
+    setRippleSpeed,
+    setRippleAmplitude,
+    setEnableStandingWave,
+    setEnableRipple,
+    targetShape,
+    setTargetShape,
+    geometryParams,
+    setGeometryParams,
   } = useAppStore()
 
   const [zoom, setZoom] = useState(1)
   const [renderMode, setRenderMode] = useState<RenderMode>('lines')
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [modelData, setModelData] = useState<{
     vertices: [number, number, number][]
     faces: [number, number, number][]
     normals: [number, number, number][]
   } | null>(null)
+  
   const canvasContainerRef = useRef<HTMLDivElement>(null)
 
   // Generate 3D model from adjusted points
@@ -188,6 +236,33 @@ export function View3DSection() {
     }
   }, [handleWheel])
 
+  // Fullscreen handler
+  const handleFullscreen = useCallback(() => {
+    const container = canvasContainerRef.current
+    if (!container) return
+
+    if (!isFullscreen) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen()
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      }
+    }
+    setIsFullscreen(!isFullscreen)
+  }, [isFullscreen])
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+  }, [])
+
   return (
     <div className="grid h-full grid-cols-[2fr_1fr] gap-6 p-8">
       {/* 3D Viewer */}
@@ -200,7 +275,7 @@ export function View3DSection() {
                 Interact with the model using your mouse
               </CardDescription>
             </div>
-            <Button variant="outline" size="icon">
+            <Button variant="outline" size="icon" onClick={handleFullscreen}>
               <Maximize2 className="h-4 w-4" />
             </Button>
           </div>
@@ -217,6 +292,12 @@ export function View3DSection() {
                 modelColor={modelColor}
                 modelColor2={modelColor2}
                 useGradient={useGradient}
+                waveSpeed={waveSpeed}
+                waveAmplitude={waveAmplitude}
+                rippleSpeed={rippleSpeed}
+                rippleAmplitude={rippleAmplitude}
+                enableStandingWave={enableStandingWave}
+                enableRipple={enableRipple}
                 modelData={modelData}
               />
             </Canvas>
@@ -303,6 +384,227 @@ export function View3DSection() {
           </CardContent>
         </Card>
 
+        {/* 3D Shape Selection */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="heading-sm flex items-center gap-2">
+              <Settings2 className="h-4 w-4" />
+              3D Shape & Geometry
+            </CardTitle>
+            <CardDescription className="body-sm">
+              Configure target shape and parameters
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Target Shape */}
+            <div className="space-y-2">
+              <Label htmlFor="targetShape" className="label-text">
+                Target Shape
+              </Label>
+              <Select value={targetShape} onValueChange={setTargetShape}>
+                <SelectTrigger id="targetShape">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto (Based on Pattern)</SelectItem>
+                  <SelectItem value="sphere">Sphere</SelectItem>
+                  <SelectItem value="torus">Torus</SelectItem>
+                  <SelectItem value="ellipsoid">Ellipsoid</SelectItem>
+                  <SelectItem value="cone">Cone</SelectItem>
+                  <SelectItem value="cube">Cube</SelectItem>
+                  <SelectItem value="cuboid">Cuboid</SelectItem>
+                  <SelectItem value="hexagonal_prism">Hexagonal Prism</SelectItem>
+                  <SelectItem value="pyramid">Pyramid</SelectItem>
+                  <SelectItem value="helix">Helix</SelectItem>
+                  <SelectItem value="twisted_torus">Twisted Torus</SelectItem>
+                  <SelectItem value="wireframe_surface">Wireframe Surface</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="body-sm text-muted-foreground">
+                {targetShape === 'auto' 
+                  ? 'Shape automatically selected based on pattern classification'
+                  : 'Manually selected shape for 3D transformation'
+                }
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Geometry Parameters */}
+            <div className="space-y-4">
+              <Label className="label-text">Geometry Parameters</Label>
+              
+              {/* Extrusion Depth */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="extrusionDepth" className="body-sm">
+                    Extrusion Depth
+                  </Label>
+                  <Input
+                    type="number"
+                    value={geometryParams.extrusion_depth.toFixed(1)}
+                    onChange={(e) => setGeometryParams({ extrusion_depth: Number(e.target.value) })}
+                    className="w-20"
+                    step="0.1"
+                    min="0.1"
+                    max="10"
+                  />
+                </div>
+                <Slider
+                  id="extrusionDepth"
+                  value={[geometryParams.extrusion_depth]}
+                  onValueChange={(values) => setGeometryParams({ extrusion_depth: values[0] })}
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                />
+              </div>
+
+              {/* Curvature */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="curvature" className="body-sm">
+                    Curvature
+                  </Label>
+                  <Input
+                    type="number"
+                    value={geometryParams.curvature.toFixed(1)}
+                    onChange={(e) => setGeometryParams({ curvature: Number(e.target.value) })}
+                    className="w-20"
+                    step="0.1"
+                    min="-1"
+                    max="1"
+                  />
+                </div>
+                <Slider
+                  id="curvature"
+                  value={[geometryParams.curvature]}
+                  onValueChange={(values) => setGeometryParams({ curvature: values[0] })}
+                  min={-1}
+                  max={1}
+                  step={0.1}
+                />
+              </div>
+
+              {/* Subdivision Level */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="subdivisionLevel" className="body-sm">
+                    Subdivision Level
+                  </Label>
+                  <Input
+                    type="number"
+                    value={geometryParams.subdivision_level}
+                    onChange={(e) => setGeometryParams({ subdivision_level: Number(e.target.value) })}
+                    className="w-20"
+                    min="0"
+                    max="5"
+                  />
+                </div>
+                <Slider
+                  id="subdivisionLevel"
+                  value={[geometryParams.subdivision_level]}
+                  onValueChange={(values) => setGeometryParams({ subdivision_level: values[0] })}
+                  min={0}
+                  max={5}
+                  step={1}
+                />
+              </div>
+
+              {/* Smoothing Iterations */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="smoothingIterations" className="body-sm">
+                    Smoothing Iterations
+                  </Label>
+                  <Input
+                    type="number"
+                    value={geometryParams.smoothing_iterations}
+                    onChange={(e) => setGeometryParams({ smoothing_iterations: Number(e.target.value) })}
+                    className="w-20"
+                    min="0"
+                    max="10"
+                  />
+                </div>
+                <Slider
+                  id="smoothingIterations"
+                  value={[geometryParams.smoothing_iterations]}
+                  onValueChange={(values) => setGeometryParams({ smoothing_iterations: values[0] })}
+                  min={0}
+                  max={10}
+                  step={1}
+                />
+              </div>
+
+              {/* Pattern Scale */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="patternScale" className="body-sm">
+                    Pattern Scale
+                  </Label>
+                  <Input
+                    type="number"
+                    value={geometryParams.pattern_scale.toFixed(1)}
+                    onChange={(e) => setGeometryParams({ pattern_scale: Number(e.target.value) })}
+                    className="w-20"
+                    step="0.1"
+                    min="0.1"
+                    max="10"
+                  />
+                </div>
+                <Slider
+                  id="patternScale"
+                  value={[geometryParams.pattern_scale]}
+                  onValueChange={(values) => setGeometryParams({ pattern_scale: values[0] })}
+                  min={0.1}
+                  max={10}
+                  step={0.1}
+                />
+              </div>
+
+              {/* Hollow Toggle */}
+              <div className="flex items-center justify-between pt-2">
+                <Label htmlFor="hollow" className="body-sm">
+                  Hollow Model
+                </Label>
+                <Switch
+                  id="hollow"
+                  checked={geometryParams.hollow}
+                  onCheckedChange={(checked) => setGeometryParams({ hollow: checked })}
+                />
+              </div>
+
+              {/* Wall Thickness (only if hollow) */}
+              {geometryParams.hollow && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="wallThickness" className="body-sm">
+                      Wall Thickness
+                    </Label>
+                    <Input
+                      type="number"
+                      value={geometryParams.wall_thickness.toFixed(2)}
+                      onChange={(e) => setGeometryParams({ wall_thickness: Number(e.target.value) })}
+                      className="w-20"
+                      step="0.01"
+                      min="0.01"
+                      max="1"
+                    />
+                  </div>
+                  <Slider
+                    id="wallThickness"
+                    value={[geometryParams.wall_thickness]}
+                    onValueChange={(values) => setGeometryParams({ wall_thickness: values[0] })}
+                    min={0.01}
+                    max={1}
+                    step={0.01}
+                  />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Rendering Controls */}
         <Card>
           <CardHeader>
@@ -354,8 +656,13 @@ export function View3DSection() {
                 {renderMode === 'lines' ? 'Cymatic geometric interconnections' : 
                  renderMode === 'wireframe' ? 'Show mesh structure' :
                  renderMode === 'points' ? 'Show vertices only' :
-                 'Solid surface rendering'}
+                 'Solid rendering with Cymatic vibration effects'}
               </p>
+              {renderMode !== 'solid' && (
+                <p className="body-sm text-yellow-600 dark:text-yellow-500 mt-2">
+                  💡 Switch to Solid mode to enable Cymatic vibration effects
+                </p>
+              )}
             </div>
 
             {/* Line Width */}
@@ -467,6 +774,162 @@ export function View3DSection() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Cymatic Animation Controls */}
+        {renderMode === 'solid' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="heading-sm flex items-center gap-2">
+                <Waves className="h-4 w-4" />
+                Cymatic Vibration
+              </CardTitle>
+              <CardDescription className="body-sm">
+                Configure standing wave and ripple effects
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Standing Wave Toggle */}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="standingWave" className="body-sm">
+                  Standing Wave
+                </Label>
+                <Switch
+                  id="standingWave"
+                  checked={enableStandingWave}
+                  onCheckedChange={setEnableStandingWave}
+                />
+              </div>
+              
+              {enableStandingWave && (
+                <>
+                  {/* Wave Speed */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="waveSpeed" className="body-sm">
+                        Wave Speed
+                      </Label>
+                      <Input
+                        type="number"
+                        value={waveSpeed.toFixed(2)}
+                        onChange={(e) => setWaveSpeed(Number(e.target.value))}
+                        className="w-20"
+                        step="0.1"
+                        min="0.1"
+                        max="5"
+                      />
+                    </div>
+                    <Slider
+                      id="waveSpeed"
+                      value={[waveSpeed]}
+                      onValueChange={(values) => setWaveSpeed(values[0])}
+                      min={0.1}
+                      max={5}
+                      step={0.1}
+                    />
+                  </div>
+
+                  {/* Wave Amplitude */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="waveAmplitude" className="body-sm">
+                        Wave Intensity
+                      </Label>
+                      <Input
+                        type="number"
+                        value={waveAmplitude.toFixed(2)}
+                        onChange={(e) => setWaveAmplitude(Number(e.target.value))}
+                        className="w-20"
+                        step="0.1"
+                        min="0"
+                        max="3"
+                      />
+                    </div>
+                    <Slider
+                      id="waveAmplitude"
+                      value={[waveAmplitude]}
+                      onValueChange={(values) => setWaveAmplitude(values[0])}
+                      min={0}
+                      max={3}
+                      step={0.1}
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Ripple Effect Toggle */}
+              <div className="flex items-center justify-between border-t border-border pt-4">
+                <Label htmlFor="ripple" className="body-sm">
+                  Ripple Propagation
+                </Label>
+                <Switch
+                  id="ripple"
+                  checked={enableRipple}
+                  onCheckedChange={setEnableRipple}
+                />
+              </div>
+
+              {enableRipple && (
+                <>
+                  {/* Ripple Speed */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="rippleSpeed" className="body-sm">
+                        Ripple Speed
+                      </Label>
+                      <Input
+                        type="number"
+                        value={rippleSpeed.toFixed(2)}
+                        onChange={(e) => setRippleSpeed(Number(e.target.value))}
+                        className="w-20"
+                        step="0.1"
+                        min="0.1"
+                        max="3"
+                      />
+                    </div>
+                    <Slider
+                      id="rippleSpeed"
+                      value={[rippleSpeed]}
+                      onValueChange={(values) => setRippleSpeed(values[0])}
+                      min={0.1}
+                      max={3}
+                      step={0.1}
+                    />
+                  </div>
+
+                  {/* Ripple Amplitude */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="rippleAmplitude" className="body-sm">
+                        Ripple Intensity
+                      </Label>
+                      <Input
+                        type="number"
+                        value={rippleAmplitude.toFixed(2)}
+                        onChange={(e) => setRippleAmplitude(Number(e.target.value))}
+                        className="w-20"
+                        step="0.01"
+                        min="0"
+                        max="0.5"
+                      />
+                    </div>
+                    <Slider
+                      id="rippleAmplitude"
+                      value={[rippleAmplitude]}
+                      onValueChange={(values) => setRippleAmplitude(values[0])}
+                      min={0}
+                      max={0.5}
+                      step={0.01}
+                    />
+                  </div>
+                </>
+              )}
+
+              <p className="body-sm text-muted-foreground pt-2 border-t border-border">
+                Cymatic vibrations create a living, breathing energy field effect
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Model Stats */}
         <Card>

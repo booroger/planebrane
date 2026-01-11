@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import { Line } from '@react-three/drei'
+import { CymaticShaderMaterial } from './CymaticShaderMaterial'
 
 interface CymaticGeometryProps {
   vertices: [number, number, number][]
@@ -13,6 +14,12 @@ interface CymaticGeometryProps {
   useGradient?: boolean
   opacity?: number
   animationProgress?: number
+  waveSpeed?: number
+  waveAmplitude?: number
+  rippleSpeed?: number
+  rippleAmplitude?: number
+  enableStandingWave?: boolean
+  enableRipple?: boolean
 }
 
 export function CymaticGeometry({
@@ -26,6 +33,12 @@ export function CymaticGeometry({
   useGradient = false,
   opacity = 1.0,
   animationProgress = 1.0,
+  waveSpeed = 1.0,
+  waveAmplitude = 1.0,
+  rippleSpeed = 0.5,
+  rippleAmplitude = 0.15,
+  enableStandingWave = true,
+  enableRipple = true,
 }: CymaticGeometryProps) {
   // Convert arrays to Three.js format
   const geometry = useMemo(() => {
@@ -164,12 +177,17 @@ export function CymaticGeometry({
   if (renderMode === 'solid') {
     return (
       <mesh geometry={geometry}>
-        <meshStandardMaterial
-          color={materialColor}
-          roughness={0.3}
-          metalness={0.7}
-          transparent={opacity < 1}
+        <CymaticShaderMaterial
+          color={color}
+          color2={color2}
+          useGradient={useGradient}
           opacity={opacity}
+          waveSpeed={waveSpeed}
+          waveAmplitude={waveAmplitude}
+          rippleSpeed={rippleSpeed}
+          rippleAmplitude={rippleAmplitude}
+          enableStandingWave={enableStandingWave}
+          enableRipple={enableRipple}
         />
       </mesh>
     )

@@ -9,10 +9,10 @@ import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store/useAppStore'
 import { apiClient } from '@/lib/api'
 
-type ExportFormat = 'stl' | 'obj' | 'gltf' | 'glb'
+type ExportFormat = 'stl-binary' | 'stl-text' | 'obj' | 'gltf' | 'glb'
 
 export function ExportSection() {
-  const { projectName, modelId } = useAppStore()
+  const { projectName, modelId, exportFormat, setExportFormat } = useAppStore()
   const [quality, setQuality] = useState<'low' | 'medium' | 'high'>('high')
   const [exporting, setExporting] = useState<string | null>(null)
   const [exportProgress, setExportProgress] = useState(0)
@@ -31,12 +31,37 @@ export function ExportSection() {
       }, 100)
 
       let blob: Blob
+      let fileExtension: string
 
       if (modelId) {
         // Use real API
-        blob = await apiClient.exportModel(modelId, format)
+        switch (format) {
+          case 'stl-binary':
+            blob = await apiClient.exportModelSTL(modelId, true)
+            fileExtension = 'stl'
+            break
+          case 'stl-text':
+            blob = await apiClient.exportModelSTLText(modelId)
+            fileExtension = 'stl'
+            break
+          case 'obj':
+            blob = await apiClient.exportModelOBJ(modelId)
+            fileExtension = 'obj'
+            break
+          case 'gltf':
+            blob = await apiClient.exportModelGLTF(modelId)
+            fileExtension = 'gltf'
+            break
+          case 'glb':
+            blob = await apiClient.exportModelGLB(modelId)
+            fileExtension = 'glb'
+            break
+          default:
+            throw new Error(`Unknown format: ${format}`)
+        }
       } else {
         // Fallback to mock data for development
+        fileExtension = format.includes('stl') ? 'stl' : format
         const mockContent = `Mock ${format.toUpperCase()} file content for ${projectName}`
         blob = new Blob([mockContent], { type: 'application/octet-stream' })
       }
@@ -48,13 +73,14 @@ export function ExportSection() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${projectName.replace(/\s+/g, '_')}.${format}`
+      a.download = `${projectName.replace(/\s+/g, '_')}.${fileExtension}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
 
       setExportedFormats((prev) => new Set(prev).add(format))
+      setExportFormat(format)
     } catch (err) {
       console.error('Export failed:', err)
       setError(`Failed to export ${format.toUpperCase()}. Please try again.`)
@@ -70,7 +96,9 @@ export function ExportSection() {
     }
 
     try {
-      const result = await apiClient.saveExport(modelId, format, projectName)
+      // Map format to API format
+      const apiFormat = format.includes('stl') ? 'stl' : format as 'obj' | 'gltf' | 'glb'
+      const result = await apiClient.saveExport(modelId, apiFormat, projectName)
       console.log('Saved to:', result.path, 'Size:', result.size)
       // Could show a toast notification here
     } catch (err) {
@@ -80,9 +108,10 @@ export function ExportSection() {
   }
 
   const formatDescriptions = {
-    stl: { name: 'STL', description: 'Standard for 3D printing', extension: '.stl' },
+    'stl-binary': { name: 'STL (Binary)', description: 'Compact binary format for 3D printing', extension: '.stl' },
+    'stl-text': { name: 'STL (ASCII)', description: 'Human-readable text format', extension: '.stl' },
     obj: { name: 'OBJ', description: 'Widely compatible format', extension: '.obj' },
-    gltf: { name: 'glTF', description: 'Web-optimized 3D format', extension: '.gltf' },
+    gltf: { name: 'glTF', description: 'Web-optimized JSON format', extension: '.gltf' },
     glb: { name: 'GLB', description: 'Binary glTF (compact)', extension: '.glb' },
   }
 
@@ -215,7 +244,11 @@ export function ExportSection() {
                 </div>
                 <div className="flex justify-between body-sm">
                   <span className="text-muted-foreground">Exports Completed:</span>
-                  <Badge variant="secondary">{exportedFormats.size} / 4</Badge>
+                  <Badge variant="secondary">{exportedFormats.size} / 5</Badge>
+                </div>
+                <div className="flex justify-between body-sm">
+                  <span className="text-muted-foreground">Selected Format:</span>
+                  <Badge variant="secondary">{exportFormat}</Badge>
                 </div>
                 <div className="flex justify-between body-sm">
                   <span className="text-muted-foreground">Model ID:</span>
@@ -236,7 +269,7 @@ export function ExportSection() {
           )}
 
           {/* Success Message */}
-          {exportedFormats.size === 4 && !exporting && (
+          {exportedFormats.size === 5 && !exporting && (
             <div className="flex items-center gap-2 rounded-lg bg-accent/10 p-4">
               <CheckCircle2 className="h-5 w-5 text-accent" />
               <span className="body-sm text-accent">All formats exported successfully!</span>

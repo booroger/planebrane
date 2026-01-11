@@ -9,6 +9,12 @@ from app.core.image_analysis.edge_detection import detect_edges, compute_edge_me
 from app.core.image_analysis.symmetry import detect_symmetry
 from app.core.image_analysis.geometry_extractor import extract_geometry
 from app.core.image_analysis.preprocessor import preprocess_image
+from app.core.image_analysis.tracer import (
+    threshold_image,
+    extract_plot_points,
+    create_plot_grid,
+    apply_distance_falloff,
+)
 
 # Cache for analysis results
 _edges_cache: dict[str, dict] = {}
@@ -26,7 +32,7 @@ async def analyze_image(
 ) -> dict[str, Any]:
     """
     Run full analysis pipeline on an image.
-    
+
     Args:
         image_path: Path to the image file
         edge_threshold_low: Lower threshold for Canny edge detection
@@ -34,7 +40,7 @@ async def analyze_image(
         blur_kernel_size: Kernel size for Gaussian blur
         detect_symmetry: Whether to run symmetry detection
         extract_geometry: Whether to extract geometric parameters
-    
+
     Returns:
         Dictionary containing edges, symmetry, and geometry results
     """
@@ -42,37 +48,38 @@ async def analyze_image(
     img = cv2.imread(image_path)
     if img is None:
         raise ValueError(f"Could not load image: {image_path}")
-    
+
     preprocessed = preprocess_image(img, blur_kernel_size)
-    
+
     # Edge detection
     edges_result = await run_edge_detection(
         preprocessed,
         edge_threshold_low,
         edge_threshold_high,
     )
-    
+
     results: dict[str, Any] = {"edges": edges_result}
-    
+
     # Symmetry detection
     if detect_symmetry:
         symmetry_result = await run_symmetry_detection(preprocessed)
         results["symmetry"] = symmetry_result
-    
+
     # Geometry extraction
     if extract_geometry:
         geometry_result = await run_geometry_extraction(preprocessed, edges_result)
         results["geometry"] = geometry_result
-    
+
     # Cache results by generating a hash from the path
     import hashlib
+
     image_id = hashlib.md5(image_path.encode()).hexdigest()[:16]
     _edges_cache[image_id] = edges_result
     if detect_symmetry:
         _symmetry_cache[image_id] = results["symmetry"]
     if extract_geometry:
         _geometry_cache[image_id] = results["geometry"]
-    
+
     return results
 
 
@@ -84,16 +91,17 @@ async def run_edge_detection(
     """Run edge detection algorithms."""
     # Get edges using Canny
     edges = detect_edges(preprocessed, threshold_low, threshold_high)
-    
+
     # Compute metrics
     metrics = compute_edge_metrics(edges, preprocessed)
-    
+
     return metrics
 
 
 async def run_symmetry_detection(preprocessed: np.ndarray) -> dict:
     """Run symmetry detection."""
     from app.core.image_analysis.symmetry import detect_symmetry as symmetry_detect
+
     return symmetry_detect(preprocessed)
 
 
@@ -103,6 +111,7 @@ async def run_geometry_extraction(
 ) -> dict:
     """Extract geometric parameters."""
     from app.core.image_analysis.geometry_extractor import extract_geometry as geo_extract
+
     return geo_extract(preprocessed, edges_result)
 
 

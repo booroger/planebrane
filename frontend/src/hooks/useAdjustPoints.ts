@@ -11,6 +11,10 @@ interface UseAdjustPointsParams {
   threshold: number
   minSpacing: number
   weighting: number
+  weightEdges: number
+  weightIntersections: number
+  weightSymmetry: number
+  maxPoints: number
   enabled?: boolean
   useGeometricDetection?: boolean
 }
@@ -87,6 +91,10 @@ export function useAdjustPoints({
   threshold,
   minSpacing,
   weighting,
+  weightEdges,
+  weightIntersections,
+  weightSymmetry,
+  maxPoints,
   enabled = true,
   useGeometricDetection = true,
 }: UseAdjustPointsParams) {
@@ -96,6 +104,10 @@ export function useAdjustPoints({
     threshold,
     minSpacing,
     weighting,
+    weightEdges,
+    weightIntersections,
+    weightSymmetry,
+    maxPoints,
   })
 
   useEffect(() => {
@@ -105,11 +117,15 @@ export function useAdjustPoints({
         threshold,
         minSpacing,
         weighting,
+        weightEdges,
+        weightIntersections,
+        weightSymmetry,
+        maxPoints,
       })
     }, 300) // 300ms debounce delay
 
     return () => clearTimeout(timer)
-  }, [density, threshold, minSpacing, weighting])
+  }, [density, threshold, minSpacing, weighting, weightEdges, weightIntersections, weightSymmetry, maxPoints])
 
   const { data, isLoading, error, refetch } = useQuery<{
     id: string
@@ -121,7 +137,10 @@ export function useAdjustPoints({
       debouncedParams.density,
       debouncedParams.threshold,
       debouncedParams.minSpacing,
-      debouncedParams.weighting,
+      debouncedParams.weightEdges,
+      debouncedParams.weightIntersections,
+      debouncedParams.weightSymmetry,
+      debouncedParams.maxPoints,
     ],
     queryFn: async () => {
       if (!imageId) {
@@ -134,11 +153,11 @@ export function useAdjustPoints({
           image_id: imageId,
           density: debouncedParams.density / 100, // Normalize to 0-1 range
           threshold: debouncedParams.threshold / 255, // Normalize to 0-1 range
-          min_distance: Math.max(5, debouncedParams.minSpacing), // Min 5px
-          weight_edges: debouncedParams.weighting,
-          weight_intersections: debouncedParams.weighting * 1.5,
-          weight_symmetry: debouncedParams.weighting * 1.2,
-          max_points: Math.floor(debouncedParams.density * 10), // Scale with density
+          min_distance: Math.max(1, debouncedParams.minSpacing),
+          weight_edges: debouncedParams.weightEdges,
+          weight_intersections: debouncedParams.weightIntersections,
+          weight_symmetry: debouncedParams.weightSymmetry,
+          max_points: debouncedParams.maxPoints,
         })
 
         return {

@@ -39,23 +39,19 @@ export interface AnalyzeImageResponse {
   }
 }
 
+export interface PatternType {
+  type: 'circular' | 'radial' | 'spiral' | 'polygonal' | 'hexagonal' | 'linear' | 'mixed'
+  confidence: number
+  description: string
+}
+
 export interface PatternClassificationResponse {
-  primary_type: {
-    type: string
-    confidence: number
-  }
-  secondary_types: Array<{
-    type: string
-    confidence: number
-  }>
-  complexity: {
-    level: string
-    score: number
-  }
-  recommended_3d_params: {
-    subdivision_level: number
-    smoothing_iterations: number
-  }
+  image_id: string
+  primary_type: PatternType
+  secondary_types: PatternType[]
+  symmetry_order: number | null
+  complexity_score: number
+  features: Record<string, any>
 }
 
 export interface ExtractPointsRequest {
@@ -73,36 +69,59 @@ export interface ExtractPointsResponse {
   id: string
   image_id: string
   points: Point2D[]
-  point_count: number
+  total_points: number
   parameters: {
     density: number
     threshold: number
     min_distance: number
+    weight_edges: number
+    weight_intersections: number
+    weight_symmetry: number
+    max_points: number
   }
+  bounding_box: [number, number, number, number]
+}
+
+export type TargetShape = 
+  | 'auto'
+  | 'sphere'
+  | 'torus'
+  | 'ellipsoid'
+  | 'cone'
+  | 'cube'
+  | 'cuboid'
+  | 'hexagonal_prism'
+  | 'pyramid'
+  | 'helix'
+  | 'twisted_torus'
+  | 'wireframe_surface'
+
+export interface GeometryParams {
+  extrusion_depth?: number
+  curvature?: number
+  subdivision_level?: number
+  smoothing_iterations?: number
+  pattern_scale?: number
+  hollow?: boolean
+  wall_thickness?: number
 }
 
 export interface Generate3DRequest {
   points_extraction_id: string
-  target_shape?: string
-  geometry_params?: {
-    extrusion_depth?: number
-    curvature?: number
-    subdivision_level?: number
-    smoothing_iterations?: number
-    pattern_scale?: number
-    hollow?: boolean
-    wall_thickness?: number
-  }
+  target_shape?: TargetShape
+  geometry_params?: GeometryParams
 }
 
 export interface Generate3DResponse {
   id: string
-  shape: string
-  vertices: [number, number, number][]
-  faces: [number, number, number][]
-  normals: [number, number, number][]
+  points_extraction_id: string
+  image_id: string
+  target_shape: string
+  actual_shape: string
   vertex_count: number
   face_count: number
+  geometry_params: GeometryParams
+  created_at: string
   bounding_box: [number, number, number, number, number, number]
 }
 
@@ -174,6 +193,10 @@ export const apiClient = {
     density?: number
     threshold?: number
     min_distance?: number
+    weight_edges?: number
+    weight_intersections?: number
+    weight_symmetry?: number
+    max_points?: number
   }): Promise<ExtractPointsResponse> => {
     const response = await api.put<ExtractPointsResponse>(`/points/${extractionId}/adjust`, params)
     return response.data
@@ -196,10 +219,14 @@ export const apiClient = {
   },
 
   // Update model parameters
-  updateModelParams: async (modelId: string, params: Generate3DRequest['geometry_params']): Promise<Generate3DResponse> => {
-    const response = await api.put<Generate3DResponse>(`/models/${modelId}/params`, {
-      geometry_params: params,
-    })
+  updateModelParams: async (
+    modelId: string, 
+    params: { 
+      target_shape?: TargetShape
+      geometry_params?: GeometryParams 
+    }
+  ): Promise<Generate3DResponse> => {
+    const response = await api.put<Generate3DResponse>(`/models/${modelId}/params`, params)
     return response.data
   },
 
@@ -207,6 +234,14 @@ export const apiClient = {
   exportModelSTL: async (modelId: string, binary: boolean = true): Promise<Blob> => {
     const response = await api.get(`/export/${modelId}/stl`, {
       params: { binary },
+      responseType: 'blob',
+    })
+    return response.data
+  },
+
+  exportModelSTLText: async (modelId: string): Promise<Blob> => {
+    const response = await api.get(`/export/${modelId}/stl`, {
+      params: { binary: false },
       responseType: 'blob',
     })
     return response.data

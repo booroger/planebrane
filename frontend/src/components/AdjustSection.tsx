@@ -19,11 +19,17 @@ export function AdjustSection() {
     pointDensity,
     detectionThreshold,
     minimumSpacing,
-    weightingFactor,
+    weightEdges,
+    weightIntersections,
+    weightSymmetry,
+    maxPoints,
     setPointDensity,
     setDetectionThreshold,
     setMinimumSpacing,
-    setWeightingFactor,
+    setWeightEdges,
+    setWeightIntersections,
+    setWeightSymmetry,
+    setMaxPoints,
     setCurrentStep,
     setAdjustedPoints,
     adjustedPoints,
@@ -48,20 +54,44 @@ export function AdjustSection() {
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null)
   const [snapTarget, setSnapTarget] = useState<{ x: number; y: number } | null>(null)
 
+  // Local state for sliders to prevent UI stalling
+  const [localDensity, setLocalDensity] = useState(pointDensity)
+  const [localThreshold, setLocalThreshold] = useState(detectionThreshold)
+  const [localSpacing, setLocalSpacing] = useState(minimumSpacing)
+  const [localWeightEdges, setLocalWeightEdges] = useState(weightEdges)
+  const [localWeightIntersections, setLocalWeightIntersections] = useState(weightIntersections)
+  const [localWeightSymmetry, setLocalWeightSymmetry] = useState(weightSymmetry)
+  const [localMaxPoints, setLocalMaxPoints] = useState(maxPoints)
+
+  // Sync local state when store changes (e.g. from analysis result or reset)
+  useEffect(() => {
+    setLocalDensity(pointDensity)
+    setLocalThreshold(detectionThreshold)
+    setLocalSpacing(minimumSpacing)
+    setLocalWeightEdges(weightEdges)
+    setLocalWeightIntersections(weightIntersections)
+    setLocalWeightSymmetry(weightSymmetry)
+    setLocalMaxPoints(maxPoints)
+  }, [pointDensity, detectionThreshold, minimumSpacing, weightEdges, weightIntersections, weightSymmetry, maxPoints])
+
   const { points, isLoading } = useAdjustPoints({
     imageId,
     imageUrl: uploadedImage,
     density: pointDensity,
     threshold: detectionThreshold,
     minSpacing: minimumSpacing,
-    weighting: weightingFactor,
+    weighting: 1.0,
+    weightEdges,
+    weightIntersections,
+    weightSymmetry,
+    maxPoints,
     enabled: !!uploadedImage && !!imageId && editMode === 'automatic',
     useGeometricDetection: true,
   })
 
   // Initialize with detected points from analysis or use fetched points
-  const displayPoints: Point2D[] = editMode === 'manual' 
-    ? adjustedPoints 
+  const displayPoints: Point2D[] = editMode === 'manual'
+    ? adjustedPoints
     : (points.length > 0 ? points : (patternAnalysis?.detected_points || adjustedPoints))
 
   // Update store with adjusted points
@@ -82,11 +112,11 @@ export function AdjustSection() {
           })
         }
       }
-      
+
       updateDimensions()
       const observer = new ResizeObserver(updateDimensions)
       observer.observe(imgRef.current)
-      
+
       return () => observer.disconnect()
     }
   }, [uploadedImage])
@@ -94,28 +124,28 @@ export function AdjustSection() {
   // Handle clicking on canvas to add points
   const handleCanvasClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (editMode !== 'manual' || selectedTool !== 'add') return
-    
+
     const svg = svgRef.current
     if (!svg) return
-    
+
     const rect = svg.getBoundingClientRect()
     const x = (e.clientX - rect.left) / rect.width
     const y = (e.clientY - rect.top) / rect.height
-    
+
     // Check for snap target
     const nearest = findNearestFeature(x, y, geometricFeatures, 0.03)
     const finalX = nearest ? nearest.x : x
     const finalY = nearest ? nearest.y : y
-    
+
     const newPoint: Point2D = {
       x: finalX,
       y: finalY,
-      weight: weightingFactor,
+      weight: weightEdges,
       feature_type: 'edge',
     }
-    
+
     setAdjustedPoints([...adjustedPoints, newPoint])
-  }, [editMode, selectedTool, adjustedPoints, geometricFeatures, weightingFactor, setAdjustedPoints])
+  }, [editMode, selectedTool, adjustedPoints, geometricFeatures, weightEdges, setAdjustedPoints])
 
   // Handle deleting a point
   const handleDeletePoint = useCallback((index: number) => {
@@ -133,26 +163,26 @@ export function AdjustSection() {
 
   const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
     if (draggedPointIndex === null) return
-    
+
     const svg = svgRef.current
     if (!svg) return
-    
+
     const rect = svg.getBoundingClientRect()
     const x = (e.clientX - rect.left) / rect.width
     const y = (e.clientY - rect.top) / rect.height
-    
+
     // Check for snap
     const nearest = findNearestFeature(x, y, geometricFeatures, 0.03)
-    
+
     if (nearest) {
       setSnapTarget({ x: nearest.x, y: nearest.y })
     } else {
       setSnapTarget(null)
     }
-    
+
     const finalX = nearest ? nearest.x : x
     const finalY = nearest ? nearest.y : y
-    
+
     const newPoints = [...adjustedPoints]
     newPoints[draggedPointIndex] = {
       ...newPoints[draggedPointIndex],
@@ -181,7 +211,7 @@ export function AdjustSection() {
             <div>
               <CardTitle className="heading-md">Point Adjustment Preview</CardTitle>
               <CardDescription className="body-lg">
-                {editMode === 'automatic' 
+                {editMode === 'automatic'
                   ? (isLoading ? 'Detecting geometric features...' : 'Points aligned to geometric features')
                   : `${selectedTool === 'add' ? 'Click to add points' : selectedTool === 'delete' ? 'Click points to delete' : selectedTool === 'move' ? 'Drag points to move' : 'Select a tool to edit'}`
                 }
@@ -243,7 +273,7 @@ export function AdjustSection() {
                   }}
                 />
                 {/* Overlay for detected points */}
-                <svg 
+                <svg
                   ref={svgRef}
                   className="absolute inset-0 h-full w-full"
                   onClick={handleCanvasClick}
@@ -265,7 +295,7 @@ export function AdjustSection() {
                       className="animate-pulse"
                     />
                   )}
-                  
+
                   {/* Points */}
                   {displayPoints.map((point, index) => (
                     <g key={index}>
@@ -283,8 +313,8 @@ export function AdjustSection() {
                           e.stopPropagation()
                           if (selectedTool === 'delete') handleDeletePoint(index)
                         }}
-                        style={{ 
-                          cursor: editMode === 'manual' 
+                        style={{
+                          cursor: editMode === 'manual'
                             ? (selectedTool === 'delete' ? 'pointer' : selectedTool === 'move' ? 'move' : 'default')
                             : 'default'
                         }}
@@ -339,7 +369,7 @@ export function AdjustSection() {
                 Manual
               </TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="automatic" className="space-y-4 mt-4">
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -349,15 +379,20 @@ export function AdjustSection() {
                     </Label>
                     <Input
                       type="number"
-                      value={pointDensity}
-                      onChange={(e) => setPointDensity(Number(e.target.value))}
+                      value={localDensity}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalDensity(val)
+                        setPointDensity(val)
+                      }}
                       className="w-20"
                     />
                   </div>
                   <Slider
                     id="density"
-                    value={[pointDensity]}
-                    onValueChange={(values) => setPointDensity(values[0])}
+                    value={[localDensity]}
+                    onValueChange={(values) => setLocalDensity(values[0])}
+                    onValueCommit={(values) => setPointDensity(values[0])}
                     min={10}
                     max={100}
                     step={5}
@@ -374,15 +409,20 @@ export function AdjustSection() {
                     </Label>
                     <Input
                       type="number"
-                      value={detectionThreshold}
-                      onChange={(e) => setDetectionThreshold(Number(e.target.value))}
+                      value={localThreshold}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalThreshold(val)
+                        setDetectionThreshold(val)
+                      }}
                       className="w-20"
                     />
                   </div>
                   <Slider
                     id="threshold"
-                    value={[detectionThreshold]}
-                    onValueChange={(values) => setDetectionThreshold(values[0])}
+                    value={[localThreshold]}
+                    onValueChange={(values) => setLocalThreshold(values[0])}
+                    onValueCommit={(values) => setDetectionThreshold(values[0])}
                     min={0}
                     max={255}
                     step={5}
@@ -399,15 +439,20 @@ export function AdjustSection() {
                     </Label>
                     <Input
                       type="number"
-                      value={minimumSpacing}
-                      onChange={(e) => setMinimumSpacing(Number(e.target.value))}
+                      value={localSpacing}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalSpacing(val)
+                        setMinimumSpacing(val)
+                      }}
                       className="w-20"
                     />
                   </div>
                   <Slider
                     id="spacing"
-                    value={[minimumSpacing]}
-                    onValueChange={(values) => setMinimumSpacing(values[0])}
+                    value={[localSpacing]}
+                    onValueChange={(values) => setLocalSpacing(values[0])}
+                    onValueCommit={(values) => setMinimumSpacing(values[0])}
                     min={1}
                     max={20}
                     step={1}
@@ -419,32 +464,129 @@ export function AdjustSection() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="weighting" className="label-text">
-                      Weighting Factor
+                    <Label htmlFor="weightEdges" className="label-text">
+                      Edge Weight
                     </Label>
                     <Input
                       type="number"
                       step="0.1"
-                      value={weightingFactor}
-                      onChange={(e) => setWeightingFactor(Number(e.target.value))}
+                      value={localWeightEdges}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalWeightEdges(val)
+                        setWeightEdges(val)
+                      }}
                       className="w-20"
                     />
                   </div>
                   <Slider
-                    id="weighting"
-                    value={[weightingFactor * 10]}
-                    onValueChange={(values) => setWeightingFactor(values[0] / 10)}
+                    id="weightEdges"
+                    value={[localWeightEdges]}
+                    onValueChange={(values) => setLocalWeightEdges(values[0])}
+                    onValueCommit={(values) => setWeightEdges(values[0])}
                     min={0}
-                    max={30}
-                    step={1}
+                    max={2}
+                    step={0.1}
                   />
                   <p className="body-sm text-muted-foreground">
-                    Influence of each point in 3D generation
+                    Weight for edge feature points
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="weightIntersections" className="label-text">
+                      Intersection Weight
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={localWeightIntersections}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalWeightIntersections(val)
+                        setWeightIntersections(val)
+                      }}
+                      className="w-20"
+                    />
+                  </div>
+                  <Slider
+                    id="weightIntersections"
+                    value={[localWeightIntersections]}
+                    onValueChange={(values) => setLocalWeightIntersections(values[0])}
+                    onValueCommit={(values) => setWeightIntersections(values[0])}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                  />
+                  <p className="body-sm text-muted-foreground">
+                    Weight for intersection points
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="weightSymmetry" className="label-text">
+                      Symmetry Weight
+                    </Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={localWeightSymmetry}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalWeightSymmetry(val)
+                        setWeightSymmetry(val)
+                      }}
+                      className="w-20"
+                    />
+                  </div>
+                  <Slider
+                    id="weightSymmetry"
+                    value={[localWeightSymmetry]}
+                    onValueChange={(values) => setLocalWeightSymmetry(values[0])}
+                    onValueCommit={(values) => setWeightSymmetry(values[0])}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                  />
+                  <p className="body-sm text-muted-foreground">
+                    Weight for symmetry center points
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="maxPoints" className="label-text">
+                      Max Points
+                    </Label>
+                    <Input
+                      type="number"
+                      value={localMaxPoints}
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        setLocalMaxPoints(val)
+                        setMaxPoints(val)
+                      }}
+                      className="w-20"
+                    />
+                  </div>
+                  <Slider
+                    id="maxPoints"
+                    value={[localMaxPoints]}
+                    onValueChange={(values) => setLocalMaxPoints(values[0])}
+                    onValueCommit={(values) => setMaxPoints(values[0])}
+                    min={10}
+                    max={10000}
+                    step={10}
+                  />
+                  <p className="body-sm text-muted-foreground">
+                    Maximum number of points to extract
                   </p>
                 </div>
               </div>
             </TabsContent>
-            
+
             <TabsContent value="manual" className="space-y-4 mt-4">
               <div className="space-y-3">
                 <Label className="label-text">Editing Tools</Label>
@@ -489,7 +631,7 @@ export function AdjustSection() {
             </TabsContent>
           </Tabs>
 
-            <div className="border-t border-border pt-6">
+          <div className="border-t border-border pt-6">
             {/* Clear All Points Button */}
             <Button
               variant="destructive"

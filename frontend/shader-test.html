@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cymatic Shader Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+      font-family: Arial, sans-serif;
+    }
+    #canvas {
+      width: 100vw;
+      height: 100vh;
+    }
+    #controls {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border-radius: 8px;
+      color: white;
+      max-width: 300px;
+    }
+    .control {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+    }
+    input[type="range"] {
+      width: 100%;
+    }
+    .value {
+      float: right;
+      color: #0cf;
+    }
+    h3 {
+      margin-top: 0;
+      color: #0cf;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas"></div>
+  <div id="controls">
+    <h3>Cymatic Vibration Controls</h3>
+    
+    <div class="control">
+      <label>
+        Wave Speed <span class="value" id="waveSpeedValue">1.0</span>
+      </label>
+      <input type="range" id="waveSpeed" min="0.1" max="5" step="0.1" value="1.0">
+    </div>
+    
+    <div class="control">
+      <label>
+        Wave Intensity <span class="value" id="waveAmpValue">1.0</span>
+      </label>
+      <input type="range" id="waveAmp" min="0" max="3" step="0.1" value="1.0">
+    </div>
+    
+    <div class="control">
+      <label>
+        Ripple Speed <span class="value" id="rippleSpeedValue">0.5</span>
+      </label>
+      <input type="range" id="rippleSpeed" min="0.1" max="3" step="0.1" value="0.5">
+    </div>
+    
+    <div class="control">
+      <label>
+        Ripple Intensity <span class="value" id="rippleAmpValue">0.15</span>
+      </label>
+      <input type="range" id="rippleAmp" min="0" max="0.5" step="0.01" value="0.15">
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    document.getElementById('canvas').appendChild(renderer.domElement);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(10, 10, 5);
+    scene.add(directionalLight);
+
+    // Grid
+    const gridHelper = new THREE.GridHelper(20, 20, 0x00cccc, 0x444444);
+    scene.add(gridHelper);
+
+    // Camera position
+    camera.position.set(4, 2, 4);
+
+    // Cymatic Shader Material
+    const shaderMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uColor1: { value: new THREE.Color(0x00cccc) },
+        uColor2: { value: new THREE.Color(0x1560bd) },
+        uUseGradient: { value: 1.0 },
+        uOpacity: { value: 0.9 },
+        uWaveSpeed: { value: 1.0 },
+        uWaveAmplitude: { value: 1.0 },
+        uRippleSpeed: { value: 0.5 },
+        uRippleAmplitude: { value: 0.15 },
+        uEnableStandingWave: { value: 1.0 },
+        uEnableRipple: { value: 1.0 },
+      },
+      vertexShader: `
+        uniform float uTime;
+        uniform float uWaveSpeed;
+        uniform float uWaveAmplitude;
+        uniform float uRippleSpeed;
+        uniform float uRippleAmplitude;
+        uniform float uEnableStandingWave;
+        uniform float uEnableRipple;
+        
+        varying vec3 vPosition;
+        varying vec3 vNormal;
+        varying float vDistanceFromCenter;
+        
+        void main() {
+          vNormal = normalize(normalMatrix * normal);
+          
+          vec2 centerXZ = vec2(0.0, 0.0);
+          vec2 posXZ = vec2(position.x, position.z);
+          vDistanceFromCenter = length(posXZ - centerXZ);
+          
+          vec3 newPosition = position;
+          
+          // Standing Wave Effect
+          float waveEffect = 0.0;
+          if (uEnableStandingWave > 0.5) {
+            float standingWave = sin(uTime * uWaveSpeed * 2.0);
+            waveEffect = standingWave * uWaveAmplitude * 0.3;
+            newPosition = position * (1.0 + waveEffect);
+          }
+          
+          // Ripple Effect
+          if (uEnableRipple > 0.5) {
+            float rippleFreq = 8.0;
+            float ripple = sin(vDistanceFromCenter * rippleFreq - uTime * uRippleSpeed * 5.0);
+            newPosition += normal * ripple * uRippleAmplitude;
+          }
+          
+          vPosition = newPosition;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor1;
+        uniform vec3 uColor2;
+        uniform float uUseGradient;
+        uniform float uOpacity;
+        uniform float uTime;
+        
+        varying vec3 vPosition;
+        varying vec3 vNormal;
+        varying float vDistanceFromCenter;
+        
+        void main() {
+          vec3 baseColor = uColor1;
+          
+          if (uUseGradient > 0.5) {
+            float t = vDistanceFromCenter / 2.0;
+            t = clamp(t, 0.0, 1.0);
+            baseColor = mix(uColor1, uColor2, t);
+          }
+          
+          float shimmer = sin(vDistanceFromCenter * 3.0 + uTime * 2.0) * 0.1 + 0.9;
+          baseColor *= shimmer;
+          
+          vec3 viewDirection = normalize(cameraPosition - vPosition);
+          float fresnel = pow(1.0 - abs(dot(viewDirection, vNormal)), 2.0);
+          vec3 finalColor = baseColor + vec3(fresnel * 0.3);
+          
+          gl_FragColor = vec4(finalColor, uOpacity);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    // Create torus
+    const geometry = new THREE.TorusGeometry(1.2, 0.4, 32, 64);
+    const mesh = new THREE.Mesh(geometry, shaderMaterial);
+    scene.add(mesh);
+
+    // Controls
+    const waveSpeedSlider = document.getElementById('waveSpeed');
+    const waveAmpSlider = document.getElementById('waveAmp');
+    const rippleSpeedSlider = document.getElementById('rippleSpeed');
+    const rippleAmpSlider = document.getElementById('rippleAmp');
+
+    waveSpeedSlider.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      shaderMaterial.uniforms.uWaveSpeed.value = value;
+      document.getElementById('waveSpeedValue').textContent = value.toFixed(1);
+    });
+
+    waveAmpSlider.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      shaderMaterial.uniforms.uWaveAmplitude.value = value;
+      document.getElementById('waveAmpValue').textContent = value.toFixed(1);
+    });
+
+    rippleSpeedSlider.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      shaderMaterial.uniforms.uRippleSpeed.value = value;
+      document.getElementById('rippleSpeedValue').textContent = value.toFixed(1);
+    });
+
+    rippleAmpSlider.addEventListener('input', (e) => {
+      const value = parseFloat(e.target.value);
+      shaderMaterial.uniforms.uRippleAmplitude.value = value;
+      document.getElementById('rippleAmpValue').textContent = value.toFixed(2);
+    });
+
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      shaderMaterial.uniforms.uTime.value = performance.now() / 1000;
+      
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+  </script>
+</body>
+</html>
